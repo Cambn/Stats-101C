@@ -1,0 +1,226 @@
+---
+title: "Homework 4"
+author: "Kitu Komya (404491375)"
+date: "May 13, 2017"
+output: pdf_document
+---
+
+# **1.**
+```{r}
+dat<-read.csv("houses.csv"); summary(dat)
+dat=dat[complete.cases(dat),]; summary(dat) #delete NA
+hist(dat$price)
+dat$price <- log(dat$price)
+hist(dat$price)
+set.seed(2628)
+
+#70% training, 30% test
+library(leaps)
+train = sample(5981, 4186)
+test = -train
+regfit.best = regsubsets(price~., data=dat[train,], nvmax=12, method = 'backward')
+test.mat<-model.matrix(price~., data=dat[test,])
+
+#self-defined function to get predicted value
+predict.regsubsets = function(object, newdata, id, ...){
+  form = as.formula(object$call[[2]])
+  mat = model.matrix(form, newdata)
+  coefi = coef(object, id = id)
+  xvars = names(coefi)
+  mat[,xvars]%*%coefi
+}
+
+#caluclate MSE for each model
+val.errors=vector()
+for (i in 1:12) {
+  pred = predict(regfit.best, dat[test,], id=i)
+  val.errors[i] = mean((dat$price[test]-pred)^2)
+}
+
+val.errors
+best = which.min(val.errors); best
+plot(val.errors, type = 'b')
+abline(v = best, col="red")
+reg.fit.best = regsubsets (price~., data=dat, nvmax = 12, method = 'backward')
+coef(regfit.best, best) #final model coefficients
+
+#k fold
+k = 10
+folds = sample(1:k, nrow(dat), replace = TRUE); table(folds)
+cv.errors = matrix(NA, k, 12, dimnames = list(NULL, paste(1:12)))
+for (j in 1:k){ #j is index of test set in cv
+  best.fit = regsubsets(price~., data=dat[folds!=j,], nvmax=12, method = 'backward')
+  for (p in 1:12){
+    pred = predict(best.fit, dat[folds==j,], id=p)
+    cv.errors[j,p] = mean((dat$price[folds==j]-pred)^2)
+  }
+}
+
+mean.cv.errors = apply(cv.errors, 2, mean)
+mean.cv.errors
+best = which.min(mean.cv.errors) ; best
+plot(mean.cv.errors, type = 'b')
+abline(v=best, col="red")
+reg.best=regsubsets(price~., data=dat, nvmax=12, method="backward") ##might not be full line
+coef(reg.best, best)
+
+#LOOCV
+loocv.errors = matrix(NA, nrow(dat), 12, dimnames=list(NULL, paste(1:12)))
+for (j in 1:nrow(dat)){
+  best.fit=regsubsets(price~., data=dat[-j,], nvmax=12, method="backward")
+  for (i in 1:12){
+    pred= predict(best.fit, dat[j,], id=i)
+    loocv.errors[j,i] = mean((dat$price[j]-pred)^2)
+  }
+}
+mean.loocv.errors = apply(loocv.errors, 2, mean)
+mean.loocv.errors
+best = which.min(mean.loocv.errors); best
+abline(v=best, col="red")
+reg.best = regsubsets(price~., data=dat, nvmax=12, method="backward")
+coef(reg.best, best)
+
+#Mallow's cp
+best.fit = regsubsets(price~., data=dat, nvmax=12, method="backward")
+reg.summary=summary(best.fit) #summary to fit all modesl
+best = which.min(reg.summary$cp); best
+plot(reg.summary$cp, xlab ='Number of Variables', ylab="Mallow's Cp")
+abline(v=best, col="red")
+```
+
+Validation Set cross-validation:
+Adv: It's able to better indicate how future test data that has not been seen do with this model and is preferable to the residual method.
+Dis: It can have a high variance since the evaluation depends majorly on the training data.
+
+Leave One Out cross-validation:
+Adv: All training sets are similar to others except for one.
+Dis: Estimates are highly variable. 
+
+10-fold cross-validation:
+Adv: Has a lower variance.
+Dis: Can't compare multiple models.
+
+Mallows-cp:
+Adv: Gives unbiased estimate.
+Dis: Introduces a risk of overfitting.
+
+
+# **2.**
+```{r}
+# #a ridge regression
+# library(glmnet)
+# dat.std = as.data.frame(scale(dat)) #standardization
+# x = model.matrix(price~., data=dat)[, -1]
+# y = dat$price
+# x.std = model.matrix(price~., data=dat.std)[,-1]
+# y.std = dat.std$price
+# cv.out=cv.glmnet(x.std[train,], y.std[train], alpha=0) #choose best
+# best.lambda=cv.out$lambda.min
+# ridge.mod = glmnet(x.std[train,], y.std[train], alpha=0, lambda = best.lambda)
+# coef(ridge.mod)
+# ridge.pred = predict(ridge.mod, newx=x.std[test,])
+# mean((ridge.pred-y.std[test])^2)
+# 
+# #b ridge ratio
+# lambdas= 10^seq(10, -2, length=100)
+# ridge.mod = glmnet(x.std, y.std, alpha=0, lambda=lambdas)
+# beta=as.matrix(coef(ridge.mod))[-1] #drop intercept
+# View(beta)
+# size=vector()
+# for (i in 1:100){
+#   size[i]=sqrt(sum(beta[ ,i]^2))
+# }
+# beta.lm= coef(lm(y.std~x.std))[-1] #OLS coef
+# size.lm = sqrt(sum(beta.lm^2))
+# ratio = size/size.lm
+# plot(rev(ratio), xlab="Lambda", ylab = "Ratio", type = "b")
+# 
+# #c lasso
+# cv.out = cv.glmnet(x.std[train,], y.std[train,], alpha = 1) #by default
+# best.lambda = cv.out$lambda.min
+# lasso.mod = glmnet(x.std, y.std, alpha = 1, lambda = best.lambda)
+# coef(lasso.mod)
+# lasso.pred = predict(lasso.mod, newx = x.std[test,])
+# mean((lasso.pred-y.std[test])^2)
+# 
+# #d lasso ratio
+# lambdas = 10^seq(10, -2, length=100)
+# lasso.mod=glmnet(x, y, alpha=1, lambda=lambdas) #x and y might be wrong?? pic was blurry
+# beta = as.matrix(coef(lasso.mod))[-1]
+# size=vector()
+# for (i in 1:100){
+#   size[i]=sqrt(sum(beta[,i]^2))
+# }
+# ratio = size/size.lm
+# plot(rev(ratio), xlab = "Lambda", ylab = "Ratio", type = "b")
+# lines(rev(ratio))
+
+```
+
+In comparing Ridge regression with Lasso, we see that in ridge regresion, as lambda increases, flexibility decreases. Basically, if we improve variability, we make bias worse, but if bias gets worse more slowly than variablity getting better, we can have a lower MSE. Ridge has low flexibility. Lasso is also not flexible and will give better accuracy in prediction when its increas in bias is less than its decrease in variance.
+
+# **3.**
+
+```{r}
+library(class)
+set.seed(2628)
+dat<-read.csv("morehouses.csv"); summary(dat)
+dat = dat[complete.cases(dat),]; summary(dat) #delete NAs
+
+#10 fold
+k = 10
+folds = sample(1:k, nrow(dat), replace=TRUE)
+cv.errors = matrix(NA, k, 10, dimnames=list(NULL, paste(1:10)))
+for (i in 1:10){
+  for (j in 1:k){
+    m=knn(train=dat[folds!=j, 2:14], test=dat[folds==j, 2:14], cl=dat[folds!=j, 1])
+    t = table(dat[folds==j, 1], m) #confusion matrix
+    error = 1 - sum(diag(t))/sum(t)
+    cv.errors[j, i] = error
+  }
+}
+errors = apply(cv.errors, 2, mean)
+plot(errors, type = "b")
+best = which.min(errors); best
+```
+
+
+# **4.**
+```{r}
+# part a
+set.seed(1)
+attach(Weekly)
+fit.glm <- glm(Direction ~ Lag1 + Lag2, data = Weekly, family = "binomial")
+summary(fit.glm)
+
+# part b
+fit.glm.1 <- glm(Direction ~ Lag1 + Lag2, data = Weekly[-1, ], family = "binomial")
+summary(fit.glm.1)
+
+# part c
+predict.glm(fit.glm.1, Weekly[1, ], type = "response") > 0.5
+
+# part d
+error <- rep(0, dim(Weekly)[1])
+for (i in 1:dim(Weekly)[1]) {
+    fit.glm <- glm(Direction ~ Lag1 + Lag2, data = Weekly[-i, ],  family = "binomial")
+    pred.up <- predict.glm(fit.glm, Weekly[i, ], type = "response") > 0.5
+    true.up <- Weekly[i, ]$Direction == "Up"
+    if (pred.up != true.up)
+        error[i] <- 1
+}
+error
+
+```
+
+
+# **5.**
+
+part a
+iii is right since Lasso is restrictive, and can reduce overfitting and variance in predictions. As long as it does not result in too high of a bias due to added constraints, it will outperform LS.
+
+part b
+iii is right because ridge regression is more restrictive than LS (but not as much as Lasso), for the same reasons as above.
+
+part c
+ii is right because non linear models are more flexible than LS since when the linearity assumption is broken they perform better. They do have higher variance though and will need a lower bias to perform well.
