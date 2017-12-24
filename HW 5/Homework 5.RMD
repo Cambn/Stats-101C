@@ -1,0 +1,182 @@
+---
+title: "Homework 5"
+author: "Kitu Komya"
+date: "May 25, 2017"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+**4.**
+```{r}
+x = -2:2
+y = c(1 + 0 + 0, # x = -2
+      1 + 0 + 0, # x = -1
+      1 + 1 + 0, # x = 0
+      1 + (1-0) + 0, # x = 1
+      1 + (1-1) + 0 # x =2
+      )
+plot(x,y)
+```
+
+
+We can see that the curve is constant in the interval (-2, 0) where y = 1. And it's also constant in the interval (0, 1) where y = 2. It follows a linear relationship in the interval (1, 2) where y = 3 - x.
+
+**6a.**
+
+```{r}
+# K fold cv with k = 10.
+library(ISLR)
+library(boot)
+set.seed(1)
+deltas <- rep(NA, 10)
+for (i in 1:10) {
+    fit <- glm(wage ~ poly(age, i), data = Wage)
+    deltas[i] <- cv.glm(Wage, fit, K = 10)$delta[1]
+}
+plot(1:10, deltas, xlab = "Degree", ylab = "Test MSE", type = "l")
+d.min <- which.min(deltas)
+points(which.min(deltas), deltas[which.min(deltas)], col = "red", cex = 2, pch = 20)
+```
+
+
+The graph shows that at degree = 4, the test MSE is the lowest and is thus the most optimal. 
+
+```{r}
+fit1 <- lm(wage ~ age, data = Wage)
+fit2 <- lm(wage ~ poly(age, 2), data = Wage)
+fit3 <- lm(wage ~ poly(age, 3), data = Wage)
+fit4 <- lm(wage ~ poly(age, 4), data = Wage)
+fit5 <- lm(wage ~ poly(age, 5), data = Wage)
+anova(fit1, fit2, fit3, fit4, fit5)
+```
+
+Using ANOVA, we see that either a cubic or quartic polynomial will best fit our model since the p-values are significant then. 
+
+```{r}
+plot(wage ~ age, data = Wage, col = "darkgrey")
+agelims <- range(Wage$age)
+age.grid <- seq(from = agelims[1], to = agelims[2])
+fit <- lm(wage ~ poly(age, 3), data = Wage)
+preds <- predict(fit, newdata = list(age = age.grid))
+lines(age.grid, preds, col = "red", lwd = 2)
+```
+
+**6b.**
+
+```{r}
+# K fold cv with K = 10
+cvs <- rep(NA, 10)
+for (i in 2:10) {
+    Wage$age.cut <- cut(Wage$age, i)
+    fit <- glm(wage ~ age.cut, data = Wage)
+    cvs[i] <- cv.glm(Wage, fit, K = 10)$delta[1]
+}
+plot(2:10, cvs[-1], xlab = "Cuts", ylab = "Test MSE", type = "l")
+d.min <- which.min(cvs)
+points(which.min(cvs), cvs[which.min(cvs)], col = "red", cex = 2, pch = 20)
+```
+
+The testing MSE is lowest at 8 cuts, so fit entire data using a step function of 8 cuts.
+
+```{r}
+plot(wage ~ age, data = Wage, col = "darkgrey")
+agelims <- range(Wage$age)
+age.grid <- seq(from = agelims[1], to = agelims[2])
+fit <- glm(wage ~ cut(age, 8), data = Wage)
+preds <- predict(fit, data.frame(age = age.grid))
+lines(age.grid, preds, col = "red", lwd = 2)
+```
+
+**7.**
+
+```{r}
+Wage <- read.csv(file = "WageLec2.csv")
+set.seed(1)
+summary(Wage$maritl)
+summary(Wage$jobclass)
+par(mfrow = c(1, 2))
+plot(Wage$maritl, Wage$wage)
+plot(Wage$jobclass, Wage$wage)
+```
+
+We see that a married couple earns more on average. We also see that jobs that are "informational" on average also earn more. 
+
+```{r}
+library(gam)
+fit0 <- gam(wage ~ lo(year, span = 0.7) + s(age, 5) + education, data = Wage)
+fit1 <- gam(wage ~ lo(year, span = 0.7) + s(age, 5) + education + jobclass, data = Wage)
+fit2 <- gam(wage ~ lo(year, span = 0.7) + s(age, 5) + education + maritl, data = Wage)
+fit3 <- gam(wage ~ lo(year, span = 0.7) + s(age, 5) + education + jobclass + maritl, data = Wage)
+anova(fit0, fit1, fit2, fit3)
+par(mfrow = c(3, 3))
+plot(fit3, se = T, col = "blue")
+```
+
+We thus see that fit3 is the best fit. 
+
+**10a.**
+
+```{r}
+College <- read.csv(file = "CollegeLec2.csv")
+attach(College)
+library(leaps)
+set.seed(1)
+train <- sample(length(Outstate), length(Outstate) / 2)
+test <- -train
+College.train <- College[train, ]
+College.test <- College[test, ]
+fit <- regsubsets(Outstate ~ ., data = College.train, nvmax = 17, method = "forward")
+fit.summary <- summary(fit)
+par(mfrow = c(1, 3))
+plot(fit.summary$cp, xlab = "Number of variables", ylab = "Cp", type = "l")
+min.cp <- min(fit.summary$cp)
+std.cp <- sd(fit.summary$cp)
+abline(h = min.cp + 0.2 * std.cp, col = "red", lty = 2)
+abline(h = min.cp - 0.2 * std.cp, col = "red", lty = 2)
+plot(fit.summary$bic, xlab = "Number of variables", ylab = "BIC", type='l')
+min.bic <- min(fit.summary$bic)
+std.bic <- sd(fit.summary$bic)
+abline(h = min.bic + 0.2 * std.bic, col = "red", lty = 2)
+abline(h = min.bic - 0.2 * std.bic, col = "red", lty = 2)
+plot(fit.summary$adjr2, xlab = "Number of variables", ylab = "Adjusted R2", type = "l", ylim = c(0.4, 0.84))
+max.adjr2 <- max(fit.summary$adjr2)
+std.adjr2 <- sd(fit.summary$adjr2)
+abline(h = max.adjr2 + 0.2 * std.adjr2, col = "red", lty = 2)
+abline(h = max.adjr2 - 0.2 * std.adjr2, col = "red", lty = 2)
+fit <- regsubsets(Outstate ~ ., data = College, method = "forward")
+coeffs <- coef(fit, id = 6)
+names(coeffs)
+```
+
+cp, AIC, and adjusted R square all show that the size of 6 is the minimum subset size for when the scores are 0.2 standad deviations of the optimal.
+
+
+**10b.**
+
+```{r}
+fit <- gam(Outstate ~ Private + s(Room.Board, df = 2) + s(PhD, df = 2) + s(perc.alumni, df = 2) + s(Expend, df = 5) + s(Grad.Rate, df = 2), data=College.train)
+par(mfrow = c(2, 3))
+plot(fit, se = T, col = "blue")
+```
+
+**10c.**
+
+```{r}
+preds <- predict(fit, College.test)
+err <- mean((College.test$Outstate - preds)^2)
+err
+tss <- mean((College.test$Outstate - mean(College.test$Outstate))^2)
+rss <- 1 - err / tss
+rss
+```
+
+We see that we get an r squared value of 0.77 with GAM when we use 6 predictors.
+
+**10d.**
+
+```{r}
+summary(fit)
+```
+
+Through ANOVA we see a strong nonlinear relationship between Outstate and Expend and a moderately strong nonlinear relationship between Outstate and Grad.Rate or PhD.
