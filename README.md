@@ -8,6 +8,6 @@ Stats 101C is Introduction to Statistical Models and Data Mining, which I took u
 | HW 3          | 91%   | 92%   | 86%   |
 | HW 4          | 80%   | 100%   | 100%   |
 | HW 5          | 94%   | 97%    | 93%    |
-| HW 5          | 100%   | 100%    | 97%    |
+| HW 6          | 100%   | 100%    | 97%    |
 | Final Project | 98%   | 98%   | 91%    |
 
